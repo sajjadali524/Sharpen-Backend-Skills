@@ -139,3 +139,112 @@ export const monthlySales = async (req, res) => {
         return res.status(500).json({message: error.message + "Internal server error"})
     }
 };
+
+
+export const customerLifetimeValue = async (req, res) => {
+  try {
+    const {from, to } = req.query;
+
+    const filter = {};
+    if(from && to) {
+      filter.createdAt = {$gte: new Date(from), $lt: new Date(to)}
+    };
+
+    const result = await Order.aggregate([
+      {$match: filter},
+      {$unwind: "$products"},
+      {$addFields: {
+        productRevenue: {$multiply: ["$products.price", "$products.quantity"]}
+      }},
+      {$group: {
+        _id:{
+          orderId: "$_id",
+          userId: "$userId"
+        },
+        orderRevenue: {$sum: "$productRevenue"},
+        orderQuantity: {$sum: "$products.quantity"},
+        createdAt: {$first: "$createdAt"}
+      }},
+       {
+        $group: {
+          _id: "$_id.userId",
+          totalOrders: { $sum: 1 },
+          totalQuantity: { $sum: "$orderQuantity" },
+          totalRevenue: { $sum: "$orderRevenue" },
+          firstOrder: { $min: "$createdAt" },
+          lastOrder: { $max: "$createdAt" }
+        }
+      },
+       {
+        $addFields: {
+          averageOrderValue: {
+            $divide: ["$totalRevenue", "$totalOrders"]
+          }
+        }
+      }
+    ]);
+
+    return res.status(200).json({
+      customer: result
+    })
+
+  } catch (error) {
+    return res.status(500).json({message: error.message + "Internal server error"})
+  }
+};
+
+export const customerCohort = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const m = month;
+    const y = year;
+    if(!m || m < 1 || !y || y < 2000) {
+      return res.status(400).json({message: "Invalid month or year provided"})
+    };
+    const startDate = new Date(y, m - 1, 1);
+    const endDate = new Date(y, m, 1);
+
+    const result = await Order.aggregate([
+      {$match: {createdAt: {$gte: startDate, $lt: endDate}}},
+      {$unwind: "$products"},
+      {$addFields: {productRevenue: {$multiply: ["$products.price", "$products.quantity"]}}},
+      {$group: {
+        _id: {
+          orderId: "$_id",
+          userId: "$userId"
+        },
+        orderRevenue: {$sum: "$productRevenue"},
+        createdAt: {$first: "$createdAt"}
+      }},
+      {$group: {
+        _id: "$_id.userId",
+        firstOrderDate: {$min: "$createdAt"},
+        totalOrder: {$sum: 1},
+        totalRevenue: {$sum: "$orderRevenue"}
+      }},
+      {$addFields: {
+        cohortYear: {$year: "$firstOrderDate"},
+        cohortMonth: {$month: "$firstOrderDate"},
+      }},
+      {
+        $group: {
+          _id: {
+            year: "$cohortYear",
+            month: "$cohortMonth"
+          },
+          customers: { $sum: 1 },
+          totalRevenue: { $sum: "$totalRevenue" },
+          averageRevenuePerCustomer: {
+            $avg: "$totalRevenue"
+          }
+        }
+      }
+    ]);
+
+    return res.status(200).json({
+      result
+    })
+  } catch (error) {
+    return res.status(500).json({message: error.message + "Internal server error"})
+  }
+}
