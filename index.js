@@ -3,12 +3,16 @@ import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import userRoute from "./routes/user.route.js";
 import attendanceRoute from "./routes/attendance.route.js";
-import productRoute from "./routes/produt.route.js"
+import productRoute from "./routes/produt.route.js";
+import cors from "cors";
 dotenv.config();
 
 const app = express();
 
 app.use(express.json());
+app.use(cors({
+    origin: '*'
+}))
 
 // api endpoints
 app.use("/api", userRoute);

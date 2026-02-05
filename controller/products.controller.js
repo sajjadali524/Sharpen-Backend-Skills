@@ -247,4 +247,44 @@ export const customerCohort = async (req, res) => {
   } catch (error) {
     return res.status(500).json({message: error.message + "Internal server error"})
   }
-}
+};
+
+export const getAllProducts = async (req, res) => {
+  try {
+    const {search, category} = req.query;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    if(page < 1 || limit < 1) {
+      return res.status(400).json({message: "Invalid paginatiions"})
+    };
+
+    const filter = {};
+    if(search) {
+      filter.name = search;
+    };
+    if(category) {
+      filter.category = category
+    };
+
+    const skip = (page - 1) * limit;
+
+    const products = await Product.find(filter).skip(skip).limit(limit);
+    if(!products || products.length === 0) {
+      return res.status(404).json({message: "No products exist"})
+    };
+    
+    const totalProducts = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    return res.status(200).json({message: "Products are fetched",
+      products,
+      page,
+      limit,
+      totalProducts,
+      totalPages
+    })
+  } catch (error) {
+    return res.status(500).json({message:error.message + "Internal server error"})
+  }
+};
